@@ -153,17 +153,28 @@ sudo -u postgres psql -c "SELECT version();"
     (1 row)
 
     Видите ли вы новую запись и если да то почему?
-Нет, транзакция не была совершена(не было commit);
+Нет, изменения не были зафиксированы(не было commit); Режим без автофиксации неявно начинает транзакцию при первой выданной команде; изменения надо фиксировать самостоятельно. 
 
     завершить первую транзакцию - commit;
     сделать select from persons во второй сессии
     видите ли вы новую запись и если да то почему?
-да, транзакция совершена(commit);
+да, изменения были зафиксированы(commit);
     завершите транзакцию во второй сессии
     начать новые но уже repeatable read транзации - set transaction isolation level repeatable read;
     в первой сессии добавить новую запись insert into persons(first_name, second_name) values('sveta', 'svetova');
+select * from otus.persons p ;
+ id | first_name | second_name 
+----+------------+-------------
+  1 | ivan       | ivanov
+  2 | sergey     | sergeev
+(2 rows)
+
+postgres=# set transaction isolation level repeatable read;
+WARNING:  SET TRANSACTION can only be used in transaction blocks
+SET
     сделать select* from persons во второй сессии*
     видите ли вы новую запись и если да то почему?
+ДА?
     завершить первую транзакцию - commit;
     сделать select from persons во второй сессии
     видите ли вы новую запись и если да то почему?
