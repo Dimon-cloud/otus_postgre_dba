@@ -1,0 +1,88 @@
+###Создаем локальную сеть для тестов
+
+
+https://console.cloud.yandex.ru/folders/b1gopjc957db2mmc5o4g
+
+  Идентификатор
+    fl8sfstg3riel9ansebt
+  Статус
+    Active
+  Имя
+    local-bda-64
+  Описание
+    Локальная сеть для тестов
+  Зона
+    ru-central1-d
+  Сеть
+    default
+  IPv4 CIDR
+    172.16.64.0/24
+###Создаем ВМ
+
+Имя 
+  db-01
+Описание
+  Сервер базы данных 1
+
+
+Диски и файловые хранилища
+  30Гб
+vCPu
+  4
+
+Внутренний IPv4-адрес
+  Вручную
+    172.16.64.20
+
+
+Сервисный аккаунт
+  borisov
+
+Логин
+  borisov
+SSH-ключ
+  ssh-key -t rsa -b 2048
+  yc_key
+##chmod 600 ~/.ssh/yc_key
+chmod 600 yc_key.pub
+  cat yc_key.pub
+     Вставляем SSH-ключ
+ssh -i yc_key borisov@158.160.146.141
+
+
+apt update && sudo apt upgrade -y
+apt-get install wget sudo curl gnupg2 -y
+sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
+wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo apt-key add -
+apt -y update
+apt-get install postgresql-15 -y
+systemctl start postgresql
+systemctl enable postgresql
+
+
+systemctl status postgresql
+
+Output
+● postgresql.service - PostgreSQL RDBMS
+     Loaded: loaded (/lib/systemd/system/postgresql.service; enabled; vendor preset: enabled)
+     Active: active (exited)
+   Main PID: 7543 (code=exited, status=0/SUCCESS)
+      Tasks: 0 (limit: 2300)
+     Memory: 0B
+        CPU: 0
+     CGroup: /system.slice/postgresql.service
+
+ss -antpl | grep 5432
+
+LISTEN 0      244        127.0.0.1:5432      0.0.0.0:*    users:(("postgres",pid=16671,fd=5))
+
+
+
+sudo -u postgres psql -c "SELECT version();"
+-------
+ PostgreSQL 15.5 (Debian 15.5-1.pgdg110+1) on x86_64-pc-linux-gnu, compiled by gcc (Debian 10.2.1-6) 10.2.1 20210110, 64-bit
+(1 row)
+
+
+
+        
