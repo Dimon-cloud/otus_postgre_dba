@@ -1,0 +1,247 @@
+###Подключение к YandexCloud посредствам the command-line interface
+      curl -sSL https://storage.yandexcloud.net/yandexcloud-yc/install.sh | bash
+   #In new  or renew terminal
+      yc init
+      #Welcome! This command will take you through the configuration process.
+      #Please go to https://oauth.yandex.ru/authorize?response_type=token&client_id=1a6990aa636648e9b2ef855fa7bec2fb in order to obtain OAuth token.
+
+      #Please enter OAuth token: for token you need logon in your accout in Yandex and follow https://oauth.yandex.ru/authorize?response_type=token&client_id=1a6990aa636648e9b2ef855fa7bec2fb
+      Please choose folder to use:
+      [1] default (id = b1gopjc957db2mmc5o4g)
+      [2] Create a new folder
+      Please enter your numeric choice: 1
+      Your current folder has been set to 'default' (id = b1gopjc957db2mmc5o4g).
+      Do you want to configure a default Compute zone? [Y/n] n
+      borisov:~$ yc version
+      Yandex Cloud CLI 0.117.0 linux/amd64
+
+###Cоздать ВМ с Ubuntu 20.04/22.04 или развернуть докер любым удобным способом
+      borisov:~$ yc compute zone list
+      +---------------+--------+
+      |      ID       | STATUS |
+      +---------------+--------+
+      | ru-central1-a | UP     |
+      | ru-central1-b | UP     |
+      | ru-central1-c | UP     |
+      | ru-central1-d | UP     |
+      +---------------+--------+
+
+
+      borisov:~$ yc vpc network list
+      +----------------------+---------+
+      |          ID          |  NAME   |
+      +----------------------+---------+
+      | enpg82kdthcnd49ukd0s | default |
+      +----------------------+---------+
+
+
+      dmborisov@rbta-msk-lt-302468:~$ yc vpc subnet list
+      +----------------------+-----------------------+----------------------+----------------+---------------+------------------+
+      |          ID          |         NAME          |      NETWORK ID      | ROUTE TABLE ID |     ZONE      |      RANGE       |
+      +----------------------+-----------------------+----------------------+----------------+---------------+------------------+
+      | b0c80v872o6n2nlc2abl | default-ru-central1-c | enpg82kdthcnd49ukd0s |                | ru-central1-c | [10.130.0.0/24]  |
+      | e2lv41rn6lhql5gmv1t1 | default-ru-central1-b | enpg82kdthcnd49ukd0s |                | ru-central1-b | [10.129.0.0/24]  |
+      | e9b1hef9cuaa1f1j8sn5 | default-ru-central1-a | enpg82kdthcnd49ukd0s |                | ru-central1-a | [10.128.0.0/24]  |
+      | fl8ifuvklk7j903cgj2d | default-ru-central1-d | enpg82kdthcnd49ukd0s |                | ru-central1-d | [10.131.0.0/24]  |
+      | fl8sfstg3riel9ansebt | local-bda-64          | enpg82kdthcnd49ukd0s |                | ru-central1-d | [172.16.64.0/24] |
+      +----------------------+-----------------------+----------------------+----------------+---------------+------------------+
+      yc config set compute-default-zone ru-central1-d && yc config get compute-default-zone
+
+      cd .ssh
+      ssh-keygen -t rsa -b 2048
+      Устанавливаем ВМ:
+        yc compute instance create \
+          --name bda-2 \
+          --hostname bda-2 \
+          --cores 2 \
+          --memory 4 \
+          --create-boot-disk size=15G,type=network-hdd,image-folder-id=standard-images,image-family=ubuntu-2004-lts \
+          --network-interface subnet-name=local-bda-64,nat-ip-version=ipv4 \
+          --ssh-key ~/.ssh/yc_key.pub \
+
+
+        yc compute instances list
+            +----------------------+-------+---------------+---------+----------------+--------------+
+            |          ID          | NAME  |    ZONE ID    | STATUS  |  EXTERNAL IP   | INTERNAL IP  |
+            +----------------------+-------+---------------+---------+----------------+--------------+
+            | fv4l20174jcbab6o3bq1 | bda-2 | ru-central1-d | RUNNING | 158.160.142.94 | 172.16.64.27 |
+            | fv4ud84m1ips1ge5h501 | db-01 | ru-central1-d | STOPPED |                | 172.16.64.20 |
+            +----------------------+-------+---------------+---------+----------------+--------------+
+        yc compute instances show bda-2
+
+###Поставить на нем Docker Engine
+      ssh -i ~/.ssh/yc_key yc-user@158.160.142.94
+      curl -fsSL https://get.docker.com -o get-docker.sh && sudo sh get-docker.sh && rm get-docker.sh && sudo usermod -aG docker $USER && newgrp docker
+      sudo docker network create pg-net
+
+###Cделать каталог /var/lib/postgres
+    mkdir /var/lib/postgres
+###Развернуть контейнер с PostgreSQL 15 смонтировав в него /var/lib/postgresql
+    sudo docker run --name pg-server --network pg-net -e POSTGRES_PASSWORD=postgres -d -p 5432:5432 -v /var/lib/postgres:/var/lib/postgresql/data postgres:15
+    docker ps -a
+
+
+###Развернуть контейнер с клиентом postgres
+    sudo docker run -it --rm --network pg-net --name pg-client postgres:15 psql -h pg-server -U postgres
+    Password for user postgres: (пароль postgres)
+    psql (15.5 (Debian 15.5-1.pgdg120+1))
+    Type "help" for help.
+
+    postgres=#
+
+###Подключится из контейнера с клиентом к контейнеру с сервером и сделать таблицу с парой строк
+    postgres=# create database bda2;
+    CREATE DATABASE
+    postgres=# \l
+                                                List of databases
+       Name    |  Owner   | Encoding |  Collate   |   Ctype    | ICU Locale | Locale Provider |   Access privileges
+    -----------+----------+----------+------------+------------+------------+-----------------+-----------------------
+     bda2      | postgres | UTF8     | en_US.utf8 | en_US.utf8 |            | libc            |
+     postgres  | postgres | UTF8     | en_US.utf8 | en_US.utf8 |            | libc            |
+     template0 | postgres | UTF8     | en_US.utf8 | en_US.utf8 |            | libc            | =c/postgres          +
+               |          |          |            |            |            |                 | postgres=CTc/postgres
+     template1 | postgres | UTF8     | en_US.utf8 | en_US.utf8 |            | libc            | =c/postgres          +
+               |          |          |            |            |            |                 | postgres=CTc/postgres
+    (4 rows)
+    postgres=#\c bd2
+    postgres=#
+    postgres=> \c bda2
+    psql (16.2 (Ubuntu 16.2-1.pgdg20.04+1), server 15.5 (Debian 15.5-1.pgdg120+1))
+    You are now connected to database "bda2" as user "postgres".
+    bda2=> create schema bda2;
+    CREATE SCHEMA
+    bda2=> create table bda2.persons(id bigint generated by default as identity primary key, first_name text, second_name text);
+    CREATE TABLE
+    bda2=> insert into bda2.persons(first_name, second_name) values('ivan', 'ivanov');
+    INSERT 0 1
+    bda2=> insert into bda2.persons(first_name, second_name) values('ivan', 'ivanov');
+    INSERT 0 1
+    bda2=>  insert into bda2.persons(first_name, second_name) values('petr', 'petrov');
+    INSERT 0 1
+    bda2=> select * from bda2.persons p;
+     id | first_name | second_name
+    ----+------------+-------------
+      1 | ivan       | ivanov
+      2 | ivan       | ivanov
+      3 | petr       | petrov
+    (3 rows)
+
+    bda2=>
+
+###Подключится к контейнеру с сервером с ноутбука/компьютера извне инстансов GCP/ЯО/места установки докера
+    root@bda-2:/home/yc-user# cd /var/lib/postgres
+    root@bda-2:/var/lib/postgres# ls-la
+    ls-la: command not found
+    root@bda-2:/var/lib/postgres# ls -la
+    total 136
+    drwx------ 19 systemd-coredump root              4096 Feb 11 08:01 .
+    drwxr-xr-x 41 root             root              4096 Feb 11 07:43 ..
+    drwx------  6 systemd-coredump systemd-coredump  4096 Feb 11 08:10 base
+    drwx------  2 systemd-coredump systemd-coredump  4096 Feb 11 08:03 global
+    drwx------  2 systemd-coredump systemd-coredump  4096 Feb 11 08:01 pg_commit_ts
+    drwx------  2 systemd-coredump systemd-coredump  4096 Feb 11 08:01 pg_dynshmem
+    -rw-------  1 systemd-coredump systemd-coredump  4821 Feb 11 08:01 pg_hba.conf
+    -rw-------  1 systemd-coredump systemd-coredump  1636 Feb 11 08:01 pg_ident.conf
+    drwx------  4 systemd-coredump systemd-coredump  4096 Feb 11 08:21 pg_logical
+    drwx------  4 systemd-coredump systemd-coredump  4096 Feb 11 08:01 pg_multixact
+    drwx------  2 systemd-coredump systemd-coredump  4096 Feb 11 08:01 pg_notify
+    drwx------  2 systemd-coredump systemd-coredump  4096 Feb 11 08:01 pg_replslot
+    drwx------  2 systemd-coredump systemd-coredump  4096 Feb 11 08:01 pg_serial
+    drwx------  2 systemd-coredump systemd-coredump  4096 Feb 11 08:01 pg_snapshots
+    drwx------  2 systemd-coredump systemd-coredump  4096 Feb 11 08:01 pg_stat
+    drwx------  2 systemd-coredump systemd-coredump  4096 Feb 11 08:01 pg_stat_tmp
+    drwx------  2 systemd-coredump systemd-coredump  4096 Feb 11 08:01 pg_subtrans
+    drwx------  2 systemd-coredump systemd-coredump  4096 Feb 11 08:01 pg_tblspc
+    drwx------  2 systemd-coredump systemd-coredump  4096 Feb 11 08:01 pg_twophase
+    -rw-------  1 systemd-coredump systemd-coredump     3 Feb 11 08:01 PG_VERSION
+    drwx------  3 systemd-coredump systemd-coredump  4096 Feb 11 08:01 pg_wal
+    drwx------  2 systemd-coredump systemd-coredump  4096 Feb 11 08:01 pg_xact
+    -rw-------  1 systemd-coredump systemd-coredump    88 Feb 11 08:01 postgresql.auto.conf
+    -rw-------  1 systemd-coredump systemd-coredump 29525 Feb 11 08:01 postgresql.conf
+    -rw-------  1 systemd-coredump systemd-coredump    36 Feb 11 08:01 postmaster.opts
+    -rw-------  1 systemd-coredump systemd-coredump    94 Feb 11 08:01 postmaster.pid
+
+
+#  OR
+    sudo docker exec -it pg-server bash
+    apt-get update && apt-get install vim nano -y
+    nano /var/lib/postgresql/data/pg_hba.conf
+
+    root@bda-2:/var/lib/postgres# docker ps -a
+    CONTAINER ID   IMAGE         COMMAND                  CREATED          STATUS          PORTS                                       NAMES
+    d256fbfea72e   postgres:15   "docker-entrypoint.s…"   22 minutes ago   Up 22 minutes   0.0.0.0:5432->5432/tcp, :::5432->5432/tcp   pg-server
+    root@bda-2:/var/lib/postgres# docker stop d256fbfea72e
+    d256fbfea72e
+    root@bda-2:/var/lib/postgres# docker ps -a
+    CONTAINER ID   IMAGE         COMMAND                  CREATED          STATUS         PORTS                                       NAMES
+    d256fbfea72e   postgres:15   "docker-entrypoint.s…"   27 minutes ago   Up 2 seconds   0.0.0.0:5432->5432/tcp, :::5432->5432/tcp   pg-server
+    root@bda-2:/var/lib/postgres# nano pg_hba.conf
+    root@bda-2:/var/lib/postgres# docker start d256fbfea72e
+    d256fbfea72e
+    root@bda-2:/var/lib/postgres# docker ps -a
+    CONTAINER ID   IMAGE         COMMAND                  CREATED          STATUS         PORTS                                       NAMES
+    d256fbfea72e   postgres:15   "docker-entrypoint.s…"   27 minutes ago   Up 2 seconds   0.0.0.0:5432->5432/tcp, :::5432->5432/tcp   pg-server
+    root@bda-2:/var/lib/postgres#
+
+    borisov:~$ ssh -i yc_key borisov@158.160.138.224
+    Linux db-01 5.10.0-27-amd64 #1 SMP Debian 5.10.205-2 (2023-12-31) x86_64
+
+    The programs included with the Debian GNU/Linux system are free software;
+    the exact distribution terms for each program are described in the
+    individual files in /usr/share/doc/*/copyright.
+
+    Debian GNU/Linux comes with ABSOLUTELY NO WARRANTY, to the extent
+    permitted by applicable law.
+    Last login: Sun Feb 11 08:40:45 2024 from 109.252.67.118
+    borisov@db-01:~$ psql -p 5432 -U postgres -h 158.160.142.94 -d bda2 -W
+    Password:
+
+    psql (15.5 (Debian 15.5-1.pgdg110+1))
+    Type "help" for help.
+
+    bda2=> select * from bda2.persons p;
+     id | first_name | second_name
+    ----+------------+-------------
+      1 | ivan       | ivanov
+      2 | ivan       | ivanov
+      3 | petr       | petrov
+    (3 rows)
+
+    bda2=>
+###Удалить контейнер с сервером
+    root@bda-2:/home/yc-user# docker ps -a
+    CONTAINER ID   IMAGE         COMMAND                  CREATED             STATUS          PORTS                                       NAMES
+    d256fbfea72e   postgres:15   "docker-entrypoint.s…"   About an hour ago   Up 40 minutes   0.0.0.0:5432->5432/tcp, :::5432->5432/tcp   pg-server
+    root@bda-2:/home/yc-user# docker stop d256fbfea72e
+    d256fbfea72e
+    root@bda-2:/home/yc-user# docker rm d256fbfea72e
+    d256fbfea72e
+    root@bda-2:/home/yc-user# docker ps -a
+    CONTAINER ID   IMAGE     COMMAND   CREATED   STATUS    PORTS     NAMES
+
+###Cоздать его заново
+    root@bda-2:/home/yc-user# sudo docker run --name pg-server --network pg-net -e POSTGRES_PASSWORD=postgres -d -p 5432:5432 -v /var/lib/postgres:/var/lib/postgresql/data postgres:15
+    28e0e231d0f1dbb3f600e9b98bf418528ade3c9c6bc49640ec2b07267bab322a
+    root@bda-2:/home/yc-user# docker ps -a
+    CONTAINER ID   IMAGE         COMMAND                  CREATED         STATUS         PORTS                                       NAMES
+    28e0e231d0f1   postgres:15   "docker-entrypoint.s…"   3 seconds ago   Up 2 seconds   0.0.0.0:5432->5432/tcp, :::5432->5432/tcp   pg-server
+
+###Подключится снова из контейнера с клиентом к контейнеру с сервером
+    root@bda-2:/home/yc-user# psql -h localhost -U postgres -d bda2
+    Password for user postgres:
+    psql (16.2 (Ubuntu 16.2-1.pgdg20.04+1), server 15.5 (Debian 15.5-1.pgdg120+1))
+    Type "help" for help.
+
+
+Проверить, что данные остались на месте
+    bda2=> select * from bda2.persons p;
+     id | first_name | second_name
+    ----+------------+-------------
+      1 | ivan       | ivanov
+      2 | ivan       | ivanov
+      3 | petr       | petrov
+    (3 rows)
+
+      bda2=>
+    оставляйте в ЛК ДЗ комментарии что и как вы делали и как боролись с проблемами
+
