@@ -31,8 +31,7 @@
         wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo apt-key add -
         apt -y update
         apt-get install postgresql-15 -y
-        systemctl start postgresql
-        systemctl enable postgresql
+       
 ###Проверьте что кластер запущен через sudo -u postgres pg_lsclusters
         sudo -u postgres pg_lsclusters
         Ver Cluster Port Status Owner    Data directory              Log file
@@ -143,14 +142,143 @@
       tmpfs           2.0G     0  2.0G   0% /sys/fs/cgroup
       /dev/vdb1       9.8G   24K  9.3G   1% /mnt/data
       tmpfs           392M     0  392M   0% /run/user/1000
-    сделайте пользователя postgres владельцем /mnt/data - chown -R postgres:postgres /mnt/data/
-    перенесите содержимое /var/lib/postgres/15 в /mnt/data - mv /var/lib/postgresql/15/mnt/data
-    попытайтесь запустить кластер - sudo -u postgres pg_ctlcluster 15 main start
-    напишите получилось или нет и почему
+
+
+###Cделайте пользователя postgres владельцем /mnt/data - 
+      chown -R postgres:postgres /mnt/data/
+
+###Перенесите содержимое /var/lib/postgres/15 в /mnt/data -
+      mv /var/lib/postgresql/15 /mnt/data
+###Попытайтесь запустить кластер - sudo -u postgres pg_ctlcluster 15 main start
+      sudo -u postgres pg_ctlcluster 15 main start
+   
+
+###Напишите получилось или нет и почему
+    не изменили дирректорию с базой
     задание: найти конфигурационный параметр в файлах раположенных в /etc/postgresql/15/main который надо поменять и поменяйте его
-    напишите что и почему поменяли
+    sudo systemctl edit --full postgresql@15-main.service
+    nano /etc/postgresql/15/main/postgresql.conf
+    data_directory = '/mnt/data/15/main'
+
+###напишите что и почему поменяли
     попытайтесь запустить кластер - sudo -u postgres pg_ctlcluster 15 main start
     напишите получилось или нет и почему
-    зайдите через через psql и проверьте содержимое ранее созданной таблицы
-    задание со звездочкой *: не удаляя существующий инстанс ВМ сделайте новый, поставьте на его PostgreSQL, удалите файлы с данными из /var/lib/postgres, перемонтируйте внешний диск который сделали ранее от первой виртуальной машины ко второй и запустите PostgreSQL на второй машине так чтобы он работал с данными на внешнем диске, расскажите как вы это сделали и что в итоге получилось.
+###Зайдите через через psql и проверьте содержимое ранее созданной таблицы
+    sudo -u postgres psql
+    postgres=# select * from  Diman;
+     c1 
+      ----
+     1
+    (1 row)
+
+
+###Задание со звездочкой *: не удаляя существующий инстанс ВМ сделайте новый, поставьте на его PostgreSQL, удалите файлы с данными из /var/lib/postgres, 
+  перемонтируйте внешний диск который сделали ранее от первой виртуальной машины ко второй и запустите PostgreSQL на второй машине так чтобы он работал с данными на внешнем диске, расскажите как вы это сделали и что в итоге получилось.
+
+    Shutdown VM bda-3
+
+    yc compute instance create \
+          --name bda-4 \
+          --hostname bda-4 \
+          --cores 2 \
+          --memory 4 \
+          --create-boot-disk size=15G,type=network-hdd,image-folder-id=standard-images,image-family=ubuntu-2004-lts \
+          --network-interface subnet-name=local-bda-64,nat-ip-version=ipv4 \
+          --ssh-key ~/.ssh/yc_key.pub \
+     yc compute instance detach-disk bda-3 
+            --disk-name new-disk-bda3 \
+     yc compute instance attach-disk bda-4 \
+            --disk-name new-disk-bda3 \
+            --mode rw \
+            --auto-delete \
+
+      ssh to bda-4
+      apt update && sudo apt upgrade -y
+        apt-get install wget sudo curl gnupg2 -y
+        sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
+        wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo apt-key add -
+        apt -y update
+        apt-get install postgresql-15 -y
+        root@bda-4:/home/yc-user# sudo -u postgres pg_lsclusters
+        Ver Cluster Port Status Owner    Data directory              Log file
+        15  main    5432 online postgres /var/lib/postgresql/15/main /var/log/postgresql/postgresql-15-main.log
+
+        mkdir /mnt/data/
+        chown -R postgres:postgres /mnt/data/
+
+
+        ls -la /dev/disk/by-uuid/
+        total 0
+        drwxr-xr-x 2 root root  80 Feb 21 08:06 .
+        drwxr-xr-x 6 root root 120 Feb 21 08:01 ..
+        lrwxrwxrwx 1 root root  10 Feb 21 08:06 0e883b73-ded0-4b75-b24f-91e27526e6fd -> ../../vdb1
+        lrwxrwxrwx 1 root root  10 Feb 21 08:01 be2c7c06-cc2b-4d4b-96c6-e3700932b129 -> ../../vda2
+
+        nano /etc/fstab
+          GNU nano 4.8                                                             /etc/fstab
+
+          # /etc/fstab: static file system information.
+          #
+          # Use 'blkid' to print the universally unique identifier for a
+          # device; this may be used with UUID= as a more robust way to name devices
+          # that works even if disks are added and removed. See fstab(5).
+          #
+          # <file system> <mount point>   <type>  <options>       <dump>  <pass>
+          # / was on /dev/vda2 during installation
+          UUID=be2c7c06-cc2b-4d4b-96c6-e3700932b129 /               ext4    errors=remount-ro 0       1
+          UUID=0e883b73-ded0-4b75-b24f-91e27526e6fd /mnt/data       ext4    defaults          0       2
+
+
+
+
+          mount -a 
+           nano /etc/fstab 
+            root@bda-4:/home/yc-user# df -h
+            Filesystem      Size  Used Avail Use% Mounted on
+            udev            1.9G     0  1.9G   0% /dev
+            tmpfs           392M  824K  392M   1% /run
+            /dev/vda2        15G  3.3G   11G  24% /
+            tmpfs           2.0G  1.1M  2.0G   1% /dev/shm
+            tmpfs           5.0M     0  5.0M   0% /run/lock
+            tmpfs           2.0G     0  2.0G   0% /sys/fs/cgroup
+            tmpfs           392M     0  392M   0% /run/user/1000
+            /dev/vdb1       9.8G   39M  9.2G   1% /mnt/data
+
+
+
+       
+            root@bda-4:/home/yc-user# nano /etc/postgresql/15/main/postgresql.conf 
+            data_directory = '/mnt/data/15/main'
+
+            root@bda-4:/home/yc-user# sudo -u postgres pg_ctlcluster 15 main start
+            Warning: the cluster will not be running as a systemd service. Consider using systemctl:
+            sudo systemctl start postgresql@15-main
+            sudo -u postgres psql
+
+
+            root@bda-4:/home/yc-user# sudo -u postgres psql
+            psql (15.6 (Ubuntu 15.6-1.pgdg20.04+1))
+            Type "help" for help.
+
+            postgres=# select * from  Diman;
+             c1 
+              ----
+               1
+            (1 row)
+
+          postgres=# 
+
+            
+
+
+          
+
+
+
+        
+
+
+
+            
+
 
