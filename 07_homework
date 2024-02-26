@@ -41,7 +41,7 @@
         testdb=# grant usage on SCHEMA testnm to readonly;
         GRANT
 ###Дайте новой роли право на select для всех таблиц схемы testnm
-        testdb=# grant SELECT on all TABLES in SCHEMA testnm TO readonly;
+        testdb=# 
         GRANT
 ###Cоздайте пользователя testread с паролем test123
         testdb=# CREATE USER testread with password 'test123';
@@ -73,23 +73,161 @@
 ###Подсказка в шпаргалке под пунктом 20
 ###почему так получилось с таблицей (если делали сами и без шпаргалки то может у вас все нормально)
     таблица создана в схеме public а права назначены на схему testnm
-вернитесь в базу данных testdb под пользователем postgres
-    удалите таблицу t1
-    создайте ее заново но уже с явным указанием имени схемы testnm
-    вставьте строку со значением c1=1
-    зайдите под пользователем testread в базу данных testdb
-    сделайте select * from testnm.t1;
-    получилось?
-    есть идеи почему? если нет - смотрите шпаргалку
-    как сделать так чтобы такое больше не повторялось? если нет идей - смотрите шпаргалку
-    сделайте select * from testnm.t1;
-    получилось?
-    есть идеи почему? если нет - смотрите шпаргалку
-    сделайте select * from testnm.t1;
-    получилось?
-    ура!
-    теперь попробуйте выполнить команду create table t2(c1 integer); insert into t2 values (2);
-    а как так? нам же никто прав на создание таблиц и insert в них под ролью readonly?
+###Вернитесь в базу данных testdb под пользователем postgres
+          testdb=> \q
+          root@bda-5:/home/yc-user# sudo -u postgres psql
+          psql (15.6 (Ubuntu 15.6-1.pgdg20.04+1))
+          Type "help" for help.
+
+          postgres=# \c testdb
+          You are now connected to database "testdb" as user "postgres".
+          testdb=# \dt
+             List of relations
+           Schema | Name | Type  |  Owner   
+          --------+------+-------+----------
+           public | t1   | table | postgres
+          (1 row)
+
+###Удалите таблицу t1
+          testdb=# DROP TABLE t1;
+          DROP TABLE
+          
+###Cоздайте ее заново но уже с явным указанием имени схемы testnm
+          testdb=# CREATE TABLE testnm.t1(c1 integer);
+          CREATE TABLE
+###Вставьте строку со значением c1=1
+          testdb=# INSERT INTO testnm.t1 values(1);
+          INSERT 0 1
+###Зайдите под пользователем testread в базу данных testdb
+          postgres=# \c testdb testread
+          Password for user testread: 
+          You are now connected to database "testdb" as user "testread".
+          testdb=> 
+###Cделайте select * from testnm.t1;
+###получилось?
+###есть идеи почему? если нет - смотрите шпаргалку
+###как сделать так чтобы такое больше не повторялось? если нет идей - смотрите шпаргалку
+###сделайте select * from testnm.t1;
+###получилось?
+###есть идеи почему? если нет - смотрите шпаргалку
+###сделайте select * from testnm.t1;
+###получилось?
+###ура!
+          testdb=# show search_path 
+          testdb-# ;
+             search_path   
+          -----------------
+           "$user", public
+          (1 row)
+
+          testdb=# set search_path to testnm;
+          SET
+          testdb=# show search_path;
+           search_path 
+          -------------
+           testnm
+          (1 row)
+
+          testdb=# \dt
+             List of relations
+           Schema | Name | Type  |  Owner   
+          --------+------+-------+----------
+           testnm | t1   | table | postgres
+          (1 row)
+
+          testdb=#  select * from testnm.t1;
+           c1 
+          ----
+            1
+          (1 row)
+
+          testdb=# \c testdb testread      
+          Password for user testread: 
+          You are now connected to database "testdb" as user "testread".
+          testdb=>  select * from testnm.t1;
+          ERROR:  permission denied for table t1
+          testdb=> show search_path 
+          testdb-> ;
+             search_path   
+          -----------------
+           "$user", public
+          (1 row)
+
+          testdb=> set searh_pa
+
+          testdb=> set searh_pa
+
+          testdb=> set search_path to testnm;
+          SET
+          testdb=>  select * from testnm.t1; 
+          ERROR:  permission denied for table t1
+          testdb=> show search_path ;
+           search_path 
+          -------------
+           testnm
+          (1 row)
+
+          testdb=> \c testdb postgres;
+          You are now connected to database "testdb" as user "postgres".
+          testdb=# show search_path ;
+   search_path   
+-----------------
+ "$user", public
+(1 row)
+
+testdb=# set search_path to testnm;
+SET
+testdb=# ALTER default privileges in SCHEMA testnm grant SELECT on TABLES to readonly;
+ALTER DEFAULT PRIVILEGES
+testdb=# \c testdb testread                                                           
+Password for user testread: 
+You are now connected to database "testdb" as user "testread".
+testdb=> show search_path 
+;
+   search_path   
+-----------------
+ "$user", public
+(1 row)
+
+testdb=> set search_path to testnm;
+SET
+testdb=>  select * from testnm.t1;
+ERROR:  permission denied for table t1
+testdb=> show search_path 
+;
+ search_path 
+-------------
+ testnm
+(1 row)
+
+testdb=>  select * from t1;
+ERROR:  permission denied for table t1
+testdb=> \c testdb postgres;
+You are now connected to database "testdb" as user "postgres".
+testdb=# grant SELECT on all TABLES in SCHEMA testnm TO readonly;
+GRANT
+testdb=# \c testdb testread
+Password for user testread: 
+You are now connected to database "testdb" as user "testread".
+testdb=> set search_path to testnm;
+SET
+testdb=>  select * from t1;
+ c1 
+----
+  1
+(1 row)
+
+testdb=> 
+
+##Теперь попробуйте выполнить команду create table t2(c1 integer); insert into t2 values (2);
+          testdb=> create table t2(c1 integer);
+          ERROR:  permission denied for schema testnm
+          LINE 1: create table t2(c1 integer);
+                     ^
+          testdb=> insert into t2 values (2);
+          ERROR:  relation "t2" does not exist
+          LINE 1: insert into t2 values (2);
+### А как так? нам же никто прав на создание таблиц и insert в них под ролью readonly?
     есть идеи как убрать эти права? если нет - смотрите шпаргалку
     если вы справились сами то расскажите что сделали и почему, если смотрели шпаргалку - объясните что сделали и почему выполнив указанные в ней команды
     теперь попробуйте выполнить команду create table t3(c1 integer); insert into t2 values (2);
