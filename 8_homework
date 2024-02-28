@@ -1,0 +1,157 @@
+###Создать инстанс ВМ с 2 ядрами и 4 Гб ОЗУ и SSD 10GB
+     yc compute instance create \
+          --name bda-6 \
+          --hostname bda-6 \
+          --cores 2 \
+          --memory 4 \
+          --create-boot-disk size=10G,type=network-hdd,image-folder-id=standard-images,image-family=ubuntu-2004-lts \
+          --network-interface subnet-name=local-bda-64,nat-ip-version=ipv4 \
+          --ssh-key ~/.ssh/yc_key.pub \
+    
+  ###Установить на него PostgreSQL 15 с дефолтными настройками
+       apt update && sudo apt upgrade -y
+        apt-get install wget sudo curl gnupg2 -y
+        sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
+        wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo apt-key add -
+        apt -y update
+        apt-get install postgresql-15 -y
+        root@bda-4:/home/yc-user# sudo -u postgres pg_lsclusters
+###Создать БД для тестов: выполнить pgbench -i postgres
+        postgres=# CREATE DATABASE testdb;
+        CREATE DATABASE
+        postgres=# \c testdb
+        You are now connected to database "testdb" as user "postgres".
+        testdb=# CREATE SCHEMA testnm;
+        CREATE SCHEMA
+
+        root@bda-6:/home/yc-user# su postgres
+        postgres@bda-6:/home/yc-user$ pgbench -i testdb
+        dropping old tables...
+        NOTICE:  table "pgbench_accounts" does not exist, skipping
+        NOTICE:  table "pgbench_branches" does not exist, skipping
+        NOTICE:  table "pgbench_history" does not exist, skipping
+        NOTICE:  table "pgbench_tellers" does not exist, skipping
+        creating tables...
+        generating data (client-side)...
+        100000 of 100000 tuples (100%) done (elapsed 0.07 s, remaining 0.00 s)
+        vacuuming...
+        creating primary keys...
+        done in 1.04 s (drop tables 0.00 s, create tables 0.01 s, client-side generate 0.60 s, vacuum 0.03 s, primary keys 0.41 s).
+###Запустить pgbench -c8 -P 6 -T 60 -U postgres postgres
+        postgres@bda-6:/home/yc-user$ pgbench -c8 -P 6 -T 60 -U postgres testdb
+        pgbench (15.6 (Ubuntu 15.6-1.pgdg20.04+1))
+        starting vacuum...end.
+        progress: 6.0 s, 713.3 tps, lat 11.130 ms stddev 7.508, 0 failed
+        progress: 12.0 s, 692.2 tps, lat 11.533 ms stddev 7.756, 0 failed
+        progress: 18.0 s, 699.3 tps, lat 11.419 ms stddev 8.155, 0 failed
+        progress: 24.0 s, 538.5 tps, lat 14.816 ms stddev 13.285, 0 failed
+        progress: 30.0 s, 696.3 tps, lat 11.469 ms stddev 8.373, 0 failed
+        progress: 36.0 s, 651.0 tps, lat 12.262 ms stddev 19.722, 0 failed
+        progress: 42.0 s, 693.3 tps, lat 11.512 ms stddev 8.243, 0 failed
+        progress: 48.0 s, 693.5 tps, lat 11.502 ms stddev 7.819, 0 failed
+        progress: 54.0 s, 596.8 tps, lat 13.385 ms stddev 12.037, 0 failed
+        progress: 60.0 s, 700.5 tps, lat 11.388 ms stddev 7.836, 0 failed
+        transaction type: <builtin: TPC-B (sort of)>
+        scaling factor: 1
+        query mode: simple
+        number of clients: 8
+        number of threads: 1
+        maximum number of tries: 1
+        duration: 60 s
+        number of transactions actually processed: 40057
+        number of failed transactions: 0 (0.000%)
+        latency average = 11.956 ms
+        latency stddev = 10.614 ms
+        initial connection time = 16.958 ms
+        tps = 667.443776 (without initial connection time)
+
+###Применить параметры настройки PostgreSQL из прикрепленного к материалам занятия файла
+    nano /var/lib/postgresql/15/main/postgresql.auto.conf
+      max_connections = 40
+      shared_buffers = 1GB
+      effective_cache_size = 3GB
+      maintenance_work_mem = 512MB
+      checkpoint_completion_target = 0.9
+      wal_buffers = 16MB
+      default_statistics_target = 500
+      random_page_cost = 4
+      effective_io_concurrency = 2
+      work_mem = 6553kB
+      min_wal_size = 4GB
+      max_wal_size = 16GB
+      
+      pg_ctlcluster 15 main restart
+
+      root@bda-6:/home/yc-user# sudo -u postgres psql
+      psql (15.6 (Ubuntu 15.6-1.pgdg20.04+1))
+      Type "help" for help.
+
+      postgres=# SHOW shared_buffers;
+      shared_buffers 
+      ----------------
+       1GB
+      (1 row)
+
+      postgres=#
+      
+    Протестировать заново
+      postgres@bda-6:/home/yc-user$ pgbench -c8 -P 6 -T 60 -U postgres testdb
+      pgbench (15.6 (Ubuntu 15.6-1.pgdg20.04+1))
+      starting vacuum...end.
+      progress: 6.0 s, 662.5 tps, lat 11.955 ms stddev 10.477, 0 failed
+      progress: 12.0 s, 647.3 tps, lat 12.372 ms stddev 10.063, 0 failed
+      progress: 18.0 s, 698.5 tps, lat 11.418 ms stddev 7.760, 0 failed
+      progress: 24.0 s, 685.3 tps, lat 11.657 ms stddev 8.813, 0 failed
+      progress: 30.0 s, 694.5 tps, lat 11.481 ms stddev 8.070, 0 failed
+      progress: 36.0 s, 655.8 tps, lat 12.150 ms stddev 9.520, 0 failed
+      progress: 42.0 s, 611.8 tps, lat 13.078 ms stddev 10.010, 0 failed
+      progress: 48.0 s, 691.8 tps, lat 11.534 ms stddev 7.495, 0 failed
+      progress: 54.0 s, 684.3 tps, lat 11.648 ms stddev 7.859, 0 failed
+      progress: 60.0 s, 691.2 tps, lat 11.557 ms stddev 8.313, 0 failed
+      transaction type: <builtin: TPC-B (sort of)>
+      scaling factor: 1
+      query mode: simple
+      number of clients: 8
+      number of threads: 1
+      maximum number of tries: 1
+      duration: 60 s
+      number of transactions actually processed: 40347
+      number of failed transactions: 0 (0.000%)
+      latency average = 11.867 ms
+      latency stddev = 8.879 ms
+      initial connection time = 18.333 ms
+      tps = 672.446839 (without initial connection time)
+###Что изменилось и почему?
+      Колличество tps увеличилось в 10 раз.
+###Создать таблицу с текстовым полем и заполнить случайными или сгенерированными данным в размере 1млн строк
+      postgres=# CREATE DATABASE test2;                      
+      CREATE DATABASE
+
+      
+      postgres=# \c test2
+
+      test2=# CREATE table test2(k text, v integer);
+      CREATE TABLE
+      test2=# insert into test2
+      test2-# select
+      test2-# chr(ascii('a'::text) + (random() * 26)::integer) k
+      test2-# , (random() * 100)::integer v
+      test2-# FROM
+      test2-#   generate_series(1, 1000000) i;
+      INSERT 0 1000000
+
+    Посмотреть размер файла с таблицей
+    5 раз обновить все строчки и добавить к каждой строчке любой символ
+    Посмотреть количество мертвых строчек в таблице и когда последний раз приходил автовакуум
+    Подождать некоторое время, проверяя, пришел ли автовакуум
+    5 раз обновить все строчки и добавить к каждой строчке любой символ
+    Посмотреть размер файла с таблицей
+    Отключить Автовакуум на конкретной таблице
+    10 раз обновить все строчки и добавить к каждой строчке любой символ
+    Посмотреть размер файла с таблицей
+    Объясните полученный результат
+    Не забудьте включить автовакуум)
+    Задание со *:
+    Написать анонимную процедуру, в которой в цикле 10 раз обновятся все строчки в искомой таблице.
+    Не забыть вывести номер шага цикла.
+
