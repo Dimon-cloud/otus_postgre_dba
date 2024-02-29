@@ -187,58 +187,69 @@ test2=#
      test2=# ALTER TABLE test2 SET (autovacuum_enabled = off);
      ALTER TABLE
 
-    10 раз обновить все строчки и добавить к каждой строчке любой символ
-    Посмотреть размер файла с таблицей
+###10 раз обновить все строчки и добавить к каждой строчке любой символ
+###Посмотреть размер файла с таблицей
      test2=# UPDATE test2 SET v = v + 1;
-UPDATE 1000000
-test2=# UPDATE test2 SET v = v + 1;
-UPDATE 1000000
-test2=# UPDATE test2 SET v = v + 1;
-UPDATE 1000000
-test2=# UPDATE test2 SET v = v + 1;
-UPDATE 1000000
-test2=# UPDATE test2 SET v = v + 1;
-UPDATE 1000000
-test2=# UPDATE test2 SET v = v + 1;
-UPDATE 1000000
-test2=# UPDATE test2 SET v = v + 1;
-UPDATE 1000000
-test2=# UPDATE test2 SET v = v + 1;
-UPDATE 1000000
-test2=# UPDATE test2 SET v = v + 1;
-UPDATE 1000000
-test2=# UPDATE test2 SET v = v + 1;
-UPDATE 1000000
-test2=# SELECT pg_size_pretty(pg_total_relation_size('test2'));
- pg_size_pretty 
-----------------
- 380 MB
-(1 row)
+     UPDATE 1000000
+     test2=# UPDATE test2 SET v = v + 1;
+     UPDATE 1000000
+     test2=# UPDATE test2 SET v = v + 1;
+     UPDATE 1000000
+     test2=# UPDATE test2 SET v = v + 1;
+     UPDATE 1000000
+     test2=# UPDATE test2 SET v = v + 1;
+     UPDATE 1000000
+     test2=# UPDATE test2 SET v = v + 1;
+     UPDATE 1000000
+     test2=# UPDATE test2 SET v = v + 1;
+     UPDATE 1000000
+     test2=# UPDATE test2 SET v = v + 1;
+     UPDATE 1000000
+     test2=# UPDATE test2 SET v = v + 1;
+     UPDATE 1000000
+     test2=# UPDATE test2 SET v = v + 1;
+     UPDATE 1000000
+     test2=# SELECT pg_size_pretty(pg_total_relation_size('test2'));
+      pg_size_pretty 
+          ----------------
+      380 MB
+     (1 row)
 
-test2=# select c.relname,                                      
-current_setting('autovacuum_vacuum_threshold') as av_base_thresh,
-current_setting('autovacuum_vacuum_scale_factor') as av_scale_factor,
-(current_setting('autovacuum_vacuum_threshold')::int +
-(current_setting('autovacuum_vacuum_scale_factor')::float * c.reltuples)) as av_thresh,
-s.n_dead_tup
-from pg_stat_user_tables s join pg_class c ON s.relname = c.relname
-where s.n_dead_tup > (current_setting('autovacuum_vacuum_threshold')::int
-+ (current_setting('autovacuum_vacuum_scale_factor')::float * c.reltuples));
- relname | av_base_thresh | av_scale_factor | av_thresh | n_dead_tup 
----------+----------------+-----------------+-----------+------------
- test2   | 50             | 0.2             |    200050 |    9998231
-(1 row)
+     test2=# select c.relname,                                      
+     current_setting('autovacuum_vacuum_threshold') as av_base_thresh,
+     current_setting('autovacuum_vacuum_scale_factor') as av_scale_factor,
+     (current_setting('autovacuum_vacuum_threshold')::int +
+     (current_setting('autovacuum_vacuum_scale_factor')::float * c.reltuples)) as av_thresh,
+     s.n_dead_tup
+     from pg_stat_user_tables s join pg_class c ON s.relname = c.relname
+     where s.n_dead_tup > (current_setting('autovacuum_vacuum_threshold')::int
+     + (current_setting('autovacuum_vacuum_scale_factor')::float * c.reltuples));
+      relname | av_base_thresh | av_scale_factor | av_thresh | n_dead_tup 
+     ---------+----------------+-----------------+-----------+------------
+      test2   | 50             | 0.2             |    200050 |    9998231
+     (1 row)
 
-test2=# SELECT relname, n_live_tup, n_dead_tup, trunc(100*n_dead_tup/(n_live_tup+1))::float "ratio%", last_autovacuum FROM pg_stat_user_TABLEs WHERE relname = 'test2';
- relname | n_live_tup | n_dead_tup | ratio% |        last_autovacuum        
----------+------------+------------+--------+-------------------------------
- test2   |    1000000 |    9998231 |    999 | 2024-02-29 07:40:52.742232+00
-(1 row)
+     test2=# SELECT relname, n_live_tup, n_dead_tup, trunc(100*n_dead_tup/(n_live_tup+1))::float "ratio%", last_autovacuum FROM pg_stat_user_TABLEs WHERE relname = 'test2';
+      relname | n_live_tup | n_dead_tup | ratio% |        last_autovacuum        
+     ---------+------------+------------+--------+-------------------------------
+      test2   |    1000000 |    9998231 |    999 | 2024-02-29 07:40:52.742232+00
+     (1 row)
 
-test2=# 
-    Объясните полученный результат
-    Не забудьте включить автовакуум)
+     test2=# 
+###Объясните полученный результат
+     При отключенном автовакууме значения мертвых строк не чистятся.
+###Не забудьте включить автовакуум)
+     test2=# ALTER TABLE test2 SET (autovacuum_enabled = on);
+     ALTER TABLE
+     test2=# SELECT relname, n_live_tup, n_dead_tup, trunc(100*n_dead_tup/(n_live_tup+1))::float "ratio%", last_autovacuum FROM pg_stat_user_TABLEs WHERE relname = 'test2';
+      relname | n_live_tup | n_dead_tup | ratio% |       last_autovacuum        
+     ---------+------------+------------+--------+------------------------------
+      test2   |    1000000 |          0 |      0 | 2024-02-29 09:09:58.23106+00
+
     Задание со *:
     Написать анонимную процедуру, в которой в цикле 10 раз обновятся все строчки в искомой таблице.
+     FOR i IN 1..10 LOOP
+         UPDATE test2 SET v = v + 1;
+     END LOOP;
     Не забыть вывести номер шага цикла.
 
