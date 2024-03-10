@@ -1,0 +1,70 @@
+
+    Настройте выполнение контрольной точки раз в 30 секунд.
+postgres=# select setting, unit from pg_settings where name = 'checkpoint_timeout';
+ setting | unit 
+---------+------
+ 300     | s
+(1 row)
+
+postgres=# alter system set checkpoint_timeout = '30s';
+ALTER SYSTEM
+postgres=# select setting, unit from pg_settings where name = 'checkpoint_timeout';
+ setting | unit 
+---------+------
+ 300     | s
+(1 row)
+root@bda-6:/home/yc-user# pg_ctlcluster 15 main restart
+root@bda-6:/home/yc-user# sudo -u postgres psql
+psql (15.6 (Ubuntu 15.6-1.pgdg20.04+1))
+Type "help" for help.
+
+postgres=# select setting, unit from pg_settings where name = 'checkpoint_timeout';
+ setting | unit 
+---------+------
+ 30      | s
+(1 row)
+
+
+
+
+    
+    10 минут c помощью утилиты pgbench подавайте нагрузку.
+postgres=# SELECT pg_current_wal_insert_lsn();                                                                    
+ pg_current_wal_insert_lsn 
+---------------------------
+ 1/90CE6098
+(1 row)
+
+postgres=# SELECT pg_current_wal_insert_lsn();
+ pg_current_wal_insert_lsn 
+---------------------------
+ 1/A1004628
+(1 row)
+
+postgres=# \q
+root@bda-6:/home/yc-user# /usr/lib/postgresql/15/bin/pg_waldump -p /var/lib/postgresql/15/main/pg_wal -s 0/90CE6098 -e 0/A1004628
+pg_waldump: error: could not find file "000000010000000000000090": No such file or directory
+
+
+
+root@bda-6:/home/yc-user# pgbench -i --scale=1000 --foreign-keys -h localhost  -p 5432 -U postgres postgres_test
+Password: 
+dropping old tables...
+creating tables...
+generating data (client-side)...
+100000000 of 100000000 tuples (100%) done (elapsed 293.31 s, remaining 0.00 s)
+ERROR:  could not extend file "base/16490/16519.4": No space left on device
+HINT:  Check free disk space.
+CONTEXT:  COPY pgbench_accounts, line 37546000
+pgbench: error: PQendcopy failed
+
+
+
+
+
+    
+    Измерьте, какой объем журнальных файлов был сгенерирован за это время. Оцените, какой объем приходится в среднем на одну контрольную точку.
+    Проверьте данные статистики: все ли контрольные точки выполнялись точно по расписанию. Почему так произошло?
+    Сравните tps в синхронном/асинхронном режиме утилитой pgbench. Объясните полученный результат.
+    Создайте новый кластер с включенной контрольной суммой страниц. Создайте таблицу. Вставьте несколько значений. Выключите кластер. Измените пару байт в таблице. Включите кластер и сделайте выборку из таблицы. Что и почему произошло? как проигнорировать ошибку и продолжить работу?
+
