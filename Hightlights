@@ -1,0 +1,79 @@
+
+###Развернуть виртуальную машину любым удобным способом
+###Поставить на неё PostgreSQL 15 любым способом
+###Настроить кластер PostgreSQL 15 на максимальную производительность не обращая внимание на возможные проблемы с надежностью в случае аварийной перезагрузки виртуальной машины
+###Нагрузить кластер через утилиту через утилиту pgbench (https://postgrespro.ru/docs/postgrespro/14/pgbench)
+nano /var/lib/postgresql/15/main/postgresql.auto.conf
+
+max_connections = '40'
+shared_buffers = '1GB'
+effective_cache_size = '4GB'
+maintenance_work_mem = '512MB'
+checkpoint_completion_target = '0.9'
+wal_buffers = '16MB'
+default_statistics_target = '500'
+random_page_cost = '4'
+effective_io_concurrency = '2'
+work_mem = '6553kB'
+min_wal_size = '4GB'
+max_wal_size = '16GB'
+checkpoint_timeout = '30s'
+log_lock_waits = 'on'
+log_min_duration_statement = '200'
+
+pgbench -i --scale=100 --foreign-keys -h localhost  -p 5432 -U postgres parameters_psql
+
+nano /var/lib/postgresql/pg_bench.sh
+
+#!/bin/bash
+clients="1 2 5 10 15 20 25 30 35 40 45 50"
+t=600
+dir=parameters_psql
+mkdir /var/lib/postgresql/parameters_psql
+for c in $clients; do
+    echo "pgbench_${c}_${t}.txt"
+    echo "start test: "date +"%Y.%m.%d_%H:%M:%S" >> "${dir}/pgbench_${c}.txt"
+    pgbench -h localhost -p 5432 parameters_psql -c $c -j $c -T $t >> "${dir}/pgbench_${c}.txt"
+    echo "stop test: "date +"%Y.%m.%d_%H:%M:%S" >> "${dir}/pgbench_${c}.txt"
+done
+
+su postgres
+
+pgbench -i parameters_psql
+
+postgres@bda-6:/home/yc-user$ pgbench -c8 -P 6 -T 60 -U postgres parameters_psql
+pgbench (15.6 (Ubuntu 15.6-1.pgdg20.04+1))
+starting vacuum...end.
+progress: 6.0 s, 600.2 tps, lat 13.236 ms stddev 11.328, 0 failed
+progress: 12.0 s, 656.5 tps, lat 12.157 ms stddev 8.224, 0 failed
+progress: 18.0 s, 655.2 tps, lat 12.182 ms stddev 9.115, 0 failed
+progress: 24.0 s, 619.2 tps, lat 12.885 ms stddev 9.823, 0 failed
+progress: 30.0 s, 632.8 tps, lat 12.572 ms stddev 9.690, 0 failed
+progress: 36.0 s, 570.2 tps, lat 14.057 ms stddev 12.734, 0 failed
+progress: 42.0 s, 640.8 tps, lat 12.457 ms stddev 9.976, 0 failed
+progress: 48.0 s, 659.2 tps, lat 12.089 ms stddev 8.755, 0 failed
+progress: 54.0 s, 655.8 tps, lat 12.186 ms stddev 8.665, 0 failed
+progress: 60.0 s, 646.8 tps, lat 12.282 ms stddev 9.977, 0 failed
+transaction type: <builtin: TPC-B (sort of)>
+scaling factor: 1
+query mode: simple
+number of clients: 8
+number of threads: 1
+maximum number of tries: 1
+duration: 60 s
+number of transactions actually processed: 38028
+number of failed transactions: 0 (0.000%)
+latency average = 12.594 ms
+latency stddev = 9.907 ms
+initial connection time = 19.961 ms
+tps = 633.640006 (without initial connection time)
+postgres@bda-6:/home/yc-user$ 
+
+
+
+
+написать какого значения tps удалось достичь, показать какие параметры в какие значения устанавливали и почему
+
+    Задание со *: аналогично протестировать через утилиту https://github.com/Percona-Lab/sysbench-tpcc (требует установки
+    https://github.com/akopytov/sysbench)
+
