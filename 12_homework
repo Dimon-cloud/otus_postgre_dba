@@ -1,0 +1,111 @@
+##Создаем ВМ/докер c ПГ.
+Используем ранее созданный сервер с PostgreSQL
+##Создаем БД, схему и в ней таблицу.
+postgres=# create database backup_restore;
+CREATE DATABASEpostgres=# create database backup_restore;
+CREATE DATABASE
+
+
+###Заполним таблицы автосгенерированными 100 записями.
+postgres=# \c backup_restore;
+You are now connected to database "backup_restore" as user "postgres".
+backup_restore=# create table backup as select generate_series(1, 100) as id, md5(random()::text)::char(100) as fio;
+SELECT 100
+backup_restore=# create table restore as select generate_series(1, 100) as id, md5(random()::text)::char(100) as fio;
+SELECT 100
+
+Под линукс пользователем Postgres создадим каталог для бэкапов
+root@bda-6:/home/yc-user# su postgres
+postgres@bda-6:/home/yc-user$ mkdir /var/lib/postgresql/15/backup
+postgres@bda-6:/home/yc-user$ ls -la /var/lib/postgresql/15/
+total 16
+drwxr-xr-x  4 postgres postgres 4096 Mar 13 07:01 .
+drwxr-xr-x  7 postgres postgres 4096 Mar 11 14:32 ..
+drwxrwxr-x  2 postgres postgres 4096 Mar 13 07:01 backup
+drwx------ 19 postgres postgres 4096 Mar 13 06:54 main
+postgres@bda-6:/home/yc-user$ 
+
+###Сделаем логический бэкап используя утилиту COPY
+backup_restore=# \copy backup to '/var/lib/postgresql/15/backup/backup_copy.sql';         
+COPY 100
+backup_restore=# \copy restore to '/var/lib/postgresql/15/backup/restore_copy.sql';      
+COPY 100
+backup_restore=# \q
+postgres@bda-6:/home/yc-user$ ls -la /var/lib/postgresql/15/backup/
+total 32
+drwxrwxr-x 2 postgres postgres  4096 Mar 13 07:05 .
+drwxr-xr-x 4 postgres postgres  4096 Mar 13 07:01 ..
+-rw-rw-r-- 1 postgres postgres 10392 Mar 13 07:05 backup_copy.sql
+-rw-rw-r-- 1 postgres postgres 10392 Mar 13 07:05 restore_copy.sql
+postgres@bda-6:/home/yc-user$ cat /var/lib/postgresql/15/backup/restore_copy.sql       
+1       7af99060427ca3e2a91189b66804d453                                                                    
+2       10b0051f0b8b80a90ff460b16feb9b24                                                                    
+3       b397edc292b38e2dfe1a1a67464578ca                                                                    
+4       f11362354a96f33ff57dbbd706768583                                                                    
+5       75e585c96b2cdfbced7fef54a4fafd1f                                                                    
+6       a72152acdd769b3d88d179dab0476fe2                                                                    
+7       ee9f6b34e178024fbc06e90633c80851
+..... данные еще есть но пикселей пожалел.)))
+Восстановим в 2 таблицу данные из бэкапа.
+backup_restore=# truncate restore;
+TRUNCATE TABLE                      ^
+backup_restore=# select * FROM restore;
+ id | fio 
+----+-----
+(0 rows)
+
+backup_restore=# \copy restore from '/var/lib/postgresql/15/backup/restore_copy.sql';
+COPY 100
+
+###Используя утилиту pg_dump создадим бэкап в кастомном сжатом формате двух таблиц
+root@bda-6:/home/yc-user# sudo -u postgres pg_dump -d backup_restore --create -Fc > /var/lib/postgresql/15/backup/backup_restore_dump.gz
+root@bda-6:/home/yc-user# ls -la /var/lib/postgresql/15/backup/
+total 44
+drwxrwxr-x 2 postgres postgres  4096 Mar 13 07:20 .
+drwxr-xr-x 4 postgres postgres  4096 Mar 13 07:01 ..
+-rw-rw-r-- 1 postgres postgres 10392 Mar 13 07:05 backup_copy.sql
+-rw-r--r-- 1 root     root      8955 Mar 13 07:21 backup_restore_dump.gz
+-rw-rw-r-- 1 postgres postgres 10392 Mar 13 07:05 restore_copy.sql
+###Используя утилиту pg_restore восстановим в новую БД только вторую таблицу!
+backup_restore=# truncate restore;
+TRUNCATE TABLE
+backup_restore=# select * FROM restore;
+ id | fio 
+----+-----
+(0 rows)
+
+postgres@bda-6:/home/yc-user$ id
+uid=109(postgres) gid=116(postgres) groups=116(postgres),115(ssl-cert)
+
+postgres@bda-6:/home/yc-user$  pg_restore -d backup_restore -j 2 --table=restore /var/lib/postgresql/15/backup/backup_restore_dump.gz
+pg_restore: error: could not execute query: ERROR:  relation "restore" already exists
+Command was: CREATE TABLE public.restore (
+    id integer,
+    fio character(100)
+);
+
+
+postgres=# \c backup_restore;
+You are now connected to database "backup_restore" as user "postgres".
+backup_restore=# select * FROM restore;
+backup_restore=# 
+
+
+pg_restore: warning: errors ignored on restore: 1
+!!!!!!! не смотря на ошибки данные восстановились.
+!!!Повторим фокус с удлением таблицы
+
+
+postgres=# \c backup_restore;
+
+backup_restore=# drop table restore;
+DROP TABLE
+backup_restore=# \q
+postgres@bda-6:/home/yc-user$  pg_restore -d backup_restore -j 2 --table=restore /var/lib/postgresql/15/backup/backup_restore_dump.gz
+postgres@bda-6:/home/yc-user$ psql
+psql (15.6 (Ubuntu 15.6-1.pgdg20.04+1))
+Type "help" for help.
+
+postgres=# \c backup_restore;
+You are now connected to database "backup_restore" as user "postgres".
+backup_restore=# select * FROM restore;
