@@ -136,8 +136,10 @@ drwxr-xr-x 8 postgres postgres  4096 Mar 13 15:39 ..
 -rwxrwxrwx 1 postgres postgres 29681 Mar 13 15:46 tpcc_run.lua
 
 
-
+./tpcc.lua --mysql-socket=/tmp/mysql.sock --mysql-user=root --mysql-db=sbt --time=300 --threads=64 --report-interval=1 --tables=10 --scale=100 --db-driver=mysql prepare
 ./tpcc.lua --pgsql-user=postgres --pgsql-db=journal --time=300 --threads=5 --report-interval=1 --tables=10 --scale=100 --use_fk=0  --trx_level=RC --pgsql-password=12345678 --db-driver=pgsql run
+
+./tpcc.lua --pgsql-user=postgres --pgsql-db=journal --time=300 --threads=5 --report-interval=1 --tables=10 --scale=100  --pgsql-password=12345678 --db-driver=pgsql run
 
 
 
