@@ -1,5 +1,4 @@
-
-    Настройте выполнение контрольной точки раз в 30 секунд.
+###Настройте выполнение контрольной точки раз в 30 секунд.
 postgres=# select setting, unit from pg_settings where name = 'checkpoint_timeout';
  setting | unit 
 ---------+------
@@ -28,43 +27,230 @@ postgres=# select setting, unit from pg_settings where name = 'checkpoint_timeou
 
 
     
-    10 минут c помощью утилиты pgbench подавайте нагрузку.
-postgres=# SELECT pg_current_wal_insert_lsn();                                                                    
- pg_current_wal_insert_lsn 
----------------------------
- 1/90CE6098
-(1 row)
+###10 минут c помощью утилиты pgbench подавайте нагрузку.
+    create extension pageinspect; - необходимо для pg_current_wal_lsn();
 
-postgres=# SELECT pg_current_wal_insert_lsn();
- pg_current_wal_insert_lsn 
----------------------------
- 1/A1004628
-(1 row)
+    pgbench -i --scale=1000 --foreign-keys -h localhost  -p 5432 -U postgres journal;
 
-postgres=# \q
-root@bda-6:/home/yc-user# /usr/lib/postgresql/15/bin/pg_waldump -p /var/lib/postgresql/15/main/pg_wal -s 0/90CE6098 -e 0/A1004628
-pg_waldump: error: could not find file "000000010000000000000090": No such file or directory
-
-
-
-root@bda-6:/home/yc-user# pgbench -i --scale=1000 --foreign-keys -h localhost  -p 5432 -U postgres postgres_test
+postgres@bda-6:/home/yc-user$ pgbench -i --scale=100 --foreign-keys -h localhost  -p 5432 -U postgres journal; 
 Password: 
 dropping old tables...
 creating tables...
 generating data (client-side)...
-100000000 of 100000000 tuples (100%) done (elapsed 293.31 s, remaining 0.00 s)
-ERROR:  could not extend file "base/16490/16519.4": No space left on device
-HINT:  Check free disk space.
-CONTEXT:  COPY pgbench_accounts, line 37546000
-pgbench: error: PQendcopy failed
+3700000 of 10000000 tuples (37%) done (elapsed 58.79 s, remaining 100.09 s)
+5500000 of 10000000 tuples (55%) done (elapsed 101.83 s, remaining 83.31 s)
+9100000 of 10000000 tuples (91%) done (elapsed 200.74 s, remaining 19.85 s)
+10000000 of 10000000 tuples (100%) done (elapsed 228.57 s, remaining 0.00 s)
+vacuuming...
+creating primary keys...
+creating foreign keys...
 
-
-
-
-
+done in 315.29 s (drop tables 0.00 s, create tables 0.01 s, client-side generate 237.19 s, vacuum 1.09 s, primary keys 33.76 s, foreign keys 43.23 s).
+postgres@bda-6:/home/yc-user$ 
+postgres@bda-6:/home/yc-user$ 
+postgres@bda-6:/home/yc-user$ 
+postgres@bda-6:/home/yc-user$ 
+postgres@bda-6:/home/yc-user$ pgbench -c8 -P30 -T 600 -U postgres journal;                                    
+pgbench (15.6 (Ubuntu 15.6-1.pgdg20.04+1))
+starting vacuum...end.
+progress: 30.0 s, 1295.8 tps, lat 6.060 ms stddev 5.460, 0 failed
+progress: 60.0 s, 1021.4 tps, lat 7.728 ms stddev 14.180, 0 failed
+progress: 90.0 s, 1315.2 tps, lat 5.974 ms stddev 5.371, 0 failed
+progress: 120.0 s, 1007.8 tps, lat 7.837 ms stddev 27.421, 0 failed
+progress: 150.0 s, 873.9 tps, lat 9.046 ms stddev 51.373, 0 failed
+progress: 180.0 s, 701.9 tps, lat 11.301 ms stddev 59.201, 0 failed
+progress: 210.0 s, 696.5 tps, lat 11.412 ms stddev 55.279, 0 failed
+progress: 240.0 s, 735.0 tps, lat 10.672 ms stddev 44.917, 0 failed
+progress: 270.0 s, 1036.8 tps, lat 7.711 ms stddev 42.508, 0 failed
+progress: 300.0 s, 817.6 tps, lat 9.666 ms stddev 28.915, 0 failed
+progress: 330.0 s, 402.3 tps, lat 19.805 ms stddev 43.936, 0 failed
+progress: 360.0 s, 241.8 tps, lat 33.074 ms stddev 60.251, 0 failed
+progress: 390.0 s, 79.7 tps, lat 100.026 ms stddev 115.876, 0 failed
+progress: 420.0 s, 109.0 tps, lat 73.563 ms stddev 102.240, 0 failed
+progress: 450.0 s, 147.2 tps, lat 54.335 ms stddev 79.868, 0 failed
+progress: 480.0 s, 194.9 tps, lat 41.000 ms stddev 64.622, 0 failed
+progress: 510.0 s, 288.6 tps, lat 27.636 ms stddev 44.620, 0 failed
+progress: 540.0 s, 517.7 tps, lat 15.399 ms stddev 24.024, 0 failed
+progress: 570.0 s, 694.1 tps, lat 11.482 ms stddev 18.937, 0 failed
+progress: 600.0 s, 802.7 tps, lat 9.915 ms stddev 18.143, 0 failed
+transaction type: <builtin: TPC-B (sort of)>
+scaling factor: 100
+query mode: simple
+number of clients: 8
+number of threads: 1
+maximum number of tries: 1
+duration: 600 s
+number of transactions actually processed: 389405
+number of failed transactions: 0 (0.000%)
+latency average = 12.238 ms
+latency stddev = 40.041 ms
+initial connection time = 18.995 ms
+tps = 648.904850 (without initial connection time)
     
-    Измерьте, какой объем журнальных файлов был сгенерирован за это время. Оцените, какой объем приходится в среднем на одну контрольную точку.
-    Проверьте данные статистики: все ли контрольные точки выполнялись точно по расписанию. Почему так произошло?
-    Сравните tps в синхронном/асинхронном режиме утилитой pgbench. Объясните полученный результат.
-    Создайте новый кластер с включенной контрольной суммой страниц. Создайте таблицу. Вставьте несколько значений. Выключите кластер. Измените пару байт в таблице. Включите кластер и сделайте выборку из таблицы. Что и почему произошло? как проигнорировать ошибку и продолжить работу?
+
+!!!Перед транзакцией    
+postgres=# select pg_current_wal_lsn();
+ pg_current_wal_lsn 
+--------------------
+ 5/D359DBB0
+(1 row)
+
+
+postgres=# SELECT pg_current_wal_insert_lsn();
+ pg_current_wal_insert_lsn 
+---------------------------
+ 5/D359DBB0
+(1 row)
+!!!После транзакции
+postgres=# select pg_current_wal_lsn();
+ pg_current_wal_lsn 
+--------------------
+ 6/391A5A60
+(1 row)
+
+/usr/lib/postgresql/15/bin/pg_waldump -p /var/lib/postgresql/15/main/pg_wal -s 5/D359DBB0 -e 6/391A5A60
+
+rmgr: Transaction len (rec/tot):     34/    34, tx:    1096447, lsn: 5/D0F83BB0, prev 5/D0F83B78, desc: COMMIT 2024-03-13 08:27:47.263005 UTC
+rmgr: Heap2       len (rec/tot):     59/  8023, tx:          0, lsn: 5/D0F83BD8, prev 5/D0F83BB0, desc: PRUNE latestRemovedXid 980507 nredirected 1 ndead 0, blkref #0: rel 1663/16792/16884 blk 79194 FPW
+rmgr: Heap        len (rec/tot):     72/    72, tx:    1096448, lsn: 5/D0F85B48, prev 5/D0F83BD8, desc: HOT_UPDATE off 41 xmax 1096448 flags 0x60 ; new off 66 xmax 0, blkref #0: rel 1663/16792/16884 blk 79194
+rmgr: Heap        len (rec/tot):     72/    72, tx:    1096448, lsn: 5/D0F85B90, prev 5/D0F85B48, desc: HOT_UPDATE off 34 xmax 1096448 flags 0x20 ; new off 38 xmax 0, blkref #0: rel 1663/16792/16887 blk 35
+rmgr: Heap        len (rec/tot):     72/    72, tx:    1096448, lsn: 5/D0F85BD8, prev 5/D0F85B90, desc: HOT_UPDATE off 157 xmax 1096448 flags 0x20 ; new off 179 xmax 0, blkref #0: rel 1663/16792/16885 blk 5
+rmgr: Heap        len (rec/tot):     79/    79, tx:    1096448, lsn: 5/D0F85C20, prev 5/D0F85BD8, desc: INSERT off 32 flags 0x00, blkref #0: rel 1663/16792/16982 blk 1987
+rmgr: Heap        len (rec/tot):     54/    54, tx:    1096448, lsn: 5/D0F85C70, prev 5/D0F85C20, desc: LOCK off 179: xid 1096448: flags 0x00 LOCK_ONLY KEYSHR_LOCK , blkref #0: rel 1663/16792/16885 blk 5
+rmgr: Heap        len (rec/tot):     54/    54, tx:    1096448, lsn: 5/D0F85CA8, prev 5/D0F85C70, desc: LOCK off 38: xid 1096448: flags 0x00 LOCK_ONLY KEYSHR_LOCK , blkref #0: rel 1663/16792/16887 blk 35
+rmgr: Heap        len (rec/tot):     54/    54, tx:    1096448, lsn: 5/D0F85CE0, prev 5/D0F85CA8, desc: LOCK off 66: xid 1096448: flags 0x00 LOCK_ONLY KEYSHR_LOCK , blkref #0: rel 1663/16792/16884 blk 79194
+rmgr: Transaction len (rec/tot):     34/    34, tx:    1096448, lsn: 5/D0F85D18, prev 5/D0F85CE0, desc: COMMIT 2024-03-13 08:27:47.265787 UTC
+rmgr: Heap2       len (rec/tot):     58/    58, tx:          0, lsn: 5/D0F85D40, prev 5/D0F85D18, desc: PRUNE latestRemovedXid 1083118 nredirected 1 ndead 0, blkref #0: rel 1663/16792/16884 blk 109732
+rmgr: Heap        len (rec/tot):     72/    72, tx:    1096449, lsn: 5/D0F85D80, prev 5/D0F85D40, desc: HOT_UPDATE off 61 xmax 1096449 flags 0x60 ; new off 67 xmax 0, blkref #0: rel 1663/16792/16884 blk 109732
+rmgr: Heap        len (rec/tot):     72/    72, tx:    1096449, lsn: 5/D0F85DC8, prev 5/D0F85D80, desc: HOT_UPDATE off 160 xmax 1096449 flags 0x20 ; new off 193 xmax 0, blkref #0: rel 1663/16792/16887 blk 40
+rmgr: Heap        len (rec/tot):     72/    72, tx:    1096449, lsn: 5/D0F85E10, prev 5/D0F85DC8, desc: HOT_UPDATE off 134 xmax 1096449 flags 0x20 ; new off 169 xmax 0, blkref #0: rel 1663/16792/16885 blk 3
+rmgr: Heap        len (rec/tot):     79/    79, tx:    1096449, lsn: 5/D0F85E58, prev 5/D0F85E10, desc: INSERT off 33 flags 0x00, blkref #0: rel 1663/16792/16982 blk 1987
+rmgr: Heap        len (rec/tot):     54/    54, tx:    1096449, lsn: 5/D0F85EA8, prev 5/D0F85E58, desc: LOCK off 169: xid 1096449: flags 0x00 LOCK_ONLY KEYSHR_LOCK , blkref #0: rel 1663/16792/16885 blk 3
+rmgr: Heap        len (rec/tot):     54/    54, tx:    1096449, lsn: 5/D0F85EE0, prev 5/D0F85EA8, desc: LOCK off 193: xid 1096449: flags 0x00 LOCK_ONLY KEYSHR_LOCK , blkref #0: rel 1663/16792/16887 blk 40
+rmgr: Heap        len (rec/tot):     54/    54, tx:    1096449, lsn: 5/D0F85F18, prev 5/D0F85EE0, desc: LOCK off 67: xid 1096449: flags 0x00 LOCK_ONLY KEYSHR_LOCK , blkref #0: rel 1663/16792/16884 blk 109732
+rmgr: Transaction len (rec/tot):     34/    34, tx:    1096449, lsn: 5/D0F85F50, prev 5/D0F85F18, desc: COMMIT 2024-03-13 08:27:47.269068 UTC
+rmgr: Heap2       len (rec/tot):     59/  8023, tx:          0, lsn: 5/D0F85F78, prev 5/D0F85F50, desc: PRUNE latestRemovedXid 899625 nredirected 1 ndead 0, blkref #0: rel 1663/16792/16884 blk 33276 FPW
+rmgr: Heap        len (rec/tot):     74/    74, tx:    1096450, lsn: 5/D0F87EE8, prev 5/D0F85F78, desc: HOT_UPDATE off 60 xmax 1096450 flags 0x60 ; new off 66 xmax 0, blkref #0: rel 1663/16792/16884 blk 33276
+rmgr: Heap        len (rec/tot):     72/    72, tx:    1096450, lsn: 5/D0F87F38, prev 5/D0F87EE8, desc: HOT_UPDATE off 209 xmax 1096450 flags 0x20 ; new off 182 xmax 0, blkref #0: rel 1663/16792/16887 blk 39
+rmgr: Heap        len (rec/tot):     72/    72, tx:    1096450, lsn: 5/D0F87F80, prev 5/D0F87F38, desc: HOT_UPDATE off 169 xmax 1096450 flags 0x20 ; new off 214 xmax 0, blkref #0: rel 1663/16792/16885 blk 0
+rmgr: Heap        len (rec/tot):     79/    79, tx:    1096450, lsn: 5/D0F87FC8, prev 5/D0F87F80, desc: INSERT off 34 flags 0x00, blkref #0: rel 1663/16792/16982 blk 1987
+rmgr: Heap2       len (rec/tot):    142/   142, tx:    1096450, lsn: 5/D0F88030, prev 5/D0F87FC8, desc: PRUNE latestRemovedXid 1095542 nredirected 11 ndead 0, blkref #0: rel 1663/16792/16885 blk 0
+rmgr: Heap        len (rec/tot):     54/    54, tx:    1096450, lsn: 5/D0F880C0, prev 5/D0F88030, desc: LOCK off 214: xid 1096450: flags 0x00 LOCK_ONLY KEYSHR_LOCK , blkref #0: rel 1663/16792/16885 blk 0
+rmgr: Heap        len (rec/tot):     54/    54, tx:    1096450, lsn: 5/D0F880F8, prev 5/D0F880C0, desc: LOCK off 182: xid 1096450: flags 0x00 LOCK_ONLY KEYSHR_LOCK , blkref #0: rel 1663/16792/16887 blk 39
+rmgr: Heap        len (rec/tot):     54/    54, tx:    1096450, lsn: 5/D0F88130, prev 5/D0F880F8, desc: LOCK off 66: xid 1096450: flags 0x00 LOCK_ONLY KEYSHR_LOCK , blkref #0: rel 1663/16792/16884 blk 33276
+
+
+postgres=# select pg_current_wal_lsn();
+ pg_current_wal_lsn 
+--------------------
+ 6/391A5A60
+(1 row)
+####Измерьте, какой объем журнальных файлов был сгенерирован за это время. Оцените, какой объем приходится в среднем на одну контрольную точку.
+postgres=# select pg_size_pretty(SUM(pg_wal_lsn_diff(pg_current_wal_lsn(), '5/D359DBB0'))) AS wal_size FROM pg_control_checkpoint();
+ wal_size 
+----------
+ 1628 MB
+(1 row)
+
+postgres=# select '6/391A5A60'::pg_lsn - '5/D359DBB0'::pg_lsn as bytes;
+   bytes    
+------------
+ 1707114160
+(1 row)
+
+ls -lh /var/lib/postgresql/15/main/pg_wal/ | sort -d
+-rw------- 1 postgres postgres  16M Mar 13 09:10 0000000100000006000000D8
+-rw------- 1 postgres postgres  16M Mar 13 09:11 00000001000000060000004A
+-rw------- 1 postgres postgres  16M Mar 13 09:11 00000001000000060000004B
+-rw------- 1 postgres postgres  16M Mar 13 09:11 00000001000000060000004C
+-rw------- 1 postgres postgres  16M Mar 13 09:11 0000000100000006000000D9
+-rw------- 1 postgres postgres  16M Mar 13 09:11 0000000100000006000000DA
+-rw------- 1 postgres postgres  16M Mar 13 09:11 0000000100000006000000DB
+-rw------- 1 postgres postgres  16M Mar 13 09:12 00000001000000060000004D
+
+В минуту генерируется 10 файлов по 16 мБайт, следовательно 16*6/2(так как чекпоинт каждые 30 секунд)=48 МБ
+
+###Проверьте данные статистики: все ли контрольные точки выполнялись точно по расписанию. Почему так произошло?
+cat /var/log/postgresql/postgresql-15-main.log | grep check
+
+
+2024-03-13 09:09:06.127 UTC [2653] LOG:  checkpoint starting: time
+2024-03-13 09:09:33.061 UTC [2653] LOG:  checkpoint complete: wrote 3302 buffers (2.5%); 0 WAL file(s) added, 0 removed, 1 recycled; write=26.902 s, sync=0.015 s, total=26.934 s; sync files=17, longest=0.009 s, average=0.001 s; distance=27044 kB, estimate=33613 kB
+2024-03-13 09:09:36.064 UTC [2653] LOG:  checkpoint starting: time
+2024-03-13 09:10:03.050 UTC [2653] LOG:  checkpoint complete: wrote 3948 buffers (3.0%); 0 WAL file(s) added, 0 removed, 2 recycled; write=26.965 s, sync=0.006 s, total=26.986 s; sync files=8, longest=0.006 s, average=0.001 s; distance=32361 kB, estimate=33488 kB
+2024-03-13 09:10:36.083 UTC [2653] LOG:  checkpoint starting: time
+2024-03-13 09:11:03.829 UTC [2653] LOG:  checkpoint complete: wrote 5164 buffers (3.9%); 0 WAL file(s) added, 0 removed, 3 recycled; write=26.920 s, sync=0.760 s, total=27.746 s; sync files=22, longest=0.679 s, average=0.035 s; distance=42303 kB, estimate=42303 kB
+2024-03-13 09:11:06.830 UTC [2653] LOG:  checkpoint starting: time
+2024-03-13 09:11:33.457 UTC [2653] LOG:  checkpoint complete: wrote 5217 buffers (4.0%); 0 WAL file(s) added, 0 removed, 2 recycled; write=26.233 s, sync=0.360 s, total=26.627 s; sync files=19, longest=0.345 s, average=0.019 s; distance=39870 kB, estimate=42060 kB
+2024-03-13 09:11:36.460 UTC [2653] LOG:  checkpoint starting: time
+2024-03-13 09:12:03.200 UTC [2653] LOG:  checkpoint complete: wrote 6780 buffers (5.2%); 0 WAL file(s) added, 0 removed, 3 recycled; write=26.613 s, sync=0.083 s, total=26.741 s; sync files=14, longest=0.014 s, average=0.006 s; distance=49675 kB, estimate=49675 kB
+Все выполнялоси согласно расписанию, размер не превышал max_wal_size
+
+###Сравните tps в синхронном/асинхронном режиме утилитой pgbench. Объясните полученный результат.
+postgres=# select setting, unit from pg_settings where name = 'synchronous_commit';
+ setting | unit 
+---------+------
+ on      | 
+(1 row)
+
+postgres=#
+
+postgres@bda-6:/home/yc-user$ pgbench -c8 -P30 -T 120 -U postgres journal;         
+pgbench (15.6 (Ubuntu 15.6-1.pgdg20.04+1))
+starting vacuum...end.
+progress: 30.0 s, 160.9 tps, lat 49.395 ms stddev 141.188, 0 failed
+progress: 60.0 s, 153.5 tps, lat 52.142 ms stddev 179.385, 0 failed
+
+progress: 90.0 s, 214.2 tps, lat 36.779 ms stddev 123.890, 0 failed
+progress: 120.0 s, 227.2 tps, lat 35.799 ms stddev 149.039, 0 failed
+transaction type: <builtin: TPC-B (sort of)>
+scaling factor: 100
+query mode: simple
+number of clients: 8
+number of threads: 1
+maximum number of tries: 1
+duration: 120 s
+number of transactions actually processed: 22683
+number of failed transactions: 0 (0.000%)
+latency average = 42.357 ms
+latency stddev = 147.938 ms
+initial connection time = 19.767 ms
+tps = 188.354342 (without initial connection time)
+
+nano /var/lib/postgresql/15/main/postgresql.auto.conf
+synchronous_commit = off
+
+pg_ctlcluster 15 main restart
+
+postgres=# select setting, unit from pg_settings where name = 'synchronous_commit';
+ setting | unit 
+---------+------
+ off     | 
+(1 row)
+
+pgbench -c8 -P30 -T 120 -U postgres journal;
+pgbench (15.6 (Ubuntu 15.6-1.pgdg20.04+1))
+starting vacuum...end.
+progress: 30.0 s, 855.1 tps, lat 9.283 ms stddev 88.788, 0 failed
+progress: 60.0 s, 625.0 tps, lat 12.278 ms stddev 106.214, 0 failed
+progress: 90.0 s, 468.1 tps, lat 17.731 ms stddev 147.762, 0 failed
+
+progress: 120.0 s, 503.6 tps, lat 15.609 ms stddev 115.910, 0 failed
+transaction type: <builtin: TPC-B (sort of)>
+scaling factor: 100
+query mode: simple
+number of clients: 8
+number of threads: 1
+maximum number of tries: 1
+duration: 120 s
+number of transactions actually processed: 73565
+number of failed transactions: 0 (0.000%)
+latency average = 13.067 ms
+latency stddev = 112.750 ms
+initial connection time = 19.545 ms
+tps = 611.140800 (without initial connection time)
+
+В асинхронном режиме в 3 раза больше транзакций проходит(611.140800 против 188.354342).
+
+Создайте новый кластер с включенной контрольной суммой страниц. Создайте таблицу. Вставьте несколько значений. Выключите кластер. Измените пару байт в таблице. Включите кластер и сделайте выборку из таблицы. Что и почему произошло? как проигнорировать ошибку и продолжить работу?
 
