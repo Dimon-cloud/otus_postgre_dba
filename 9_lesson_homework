@@ -252,5 +252,114 @@ tps = 611.140800 (without initial connection time)
 
 В асинхронном режиме в 3 раза больше транзакций проходит(611.140800 против 188.354342).
 
-Создайте новый кластер с включенной контрольной суммой страниц. Создайте таблицу. Вставьте несколько значений. Выключите кластер. Измените пару байт в таблице. Включите кластер и сделайте выборку из таблицы. Что и почему произошло? как проигнорировать ошибку и продолжить работу?
+###Создайте новый кластер с включенной контрольной суммой страниц. Создайте таблицу. Вставьте несколько значений. Выключите кластер. Измените пару байт в таблице. Включите кластер и сделайте выборку из таблицы. Что и почему произошло? как проигнорировать ошибку и продолжить работу?
+mkdir /etc/postgresql-common/createcluster.d/
+
+
+nano /etc/postgresql-common/createcluster.d/initdb_options.conf
+initdb_options = '--data-checksums'
+
+
+root@bda-6:/home/yc-user# pg_lsclusters
+Ver Cluster Port Status Owner    Data directory               Log file
+15  main    5432 online postgres /var/lib/postgresql/15/main  /var/log/postgresql/postgresql-15-main.log
+15  main2   5433 online postgres /var/lib/postgresql/15/main2 /var/log/postgresql/postgresql-15-main2.log
+
+sudo -u postgres psql -p 5433
+
+postgres=# create table jrnl as select generate_series(1, 10) as id, md5(random()::text)::char(10) as wal;
+SELECT 10
+postgres=# show data_checksums;
+ data_checksums 
+----------------
+ on
+(1 row)
+
+postgres=# create database journal;
+CREATE DATABASE
+
+
+postgres=# \c journal;
+You are now connected to database "journal" as user "postgres".
+journal=# create table jrnl as select generate_series(1, 10) as id, md5(random()::text)::char(10) as wal;
+SELECT 10
+journal=# 
+
+
+journal=# select * from jrnl;
+ id |    wal     
+----+------------
+  1 | 51693ebb81
+  2 | 2b76454028
+  3 | 82d7f2bae6
+  4 | a9bd18c082
+  5 | 2843201a49
+  6 | a96f18b75d
+  7 | edbb9837f9
+  8 | 7d7fb0d80c
+  9 | 66a23f02ac
+ 10 | 25e801b650
+(10 rows)
+
+journal=#
+journal=# select pg_relation_filepath('jrnl') \gx
+-[ RECORD 1 ]--------+-----------------
+pg_relation_filepath | base/16387/16391
+
+root@bda-6:/home/yc-user# pg_lsclusters 
+Ver Cluster Port Status Owner    Data directory               Log file
+15  main    5432 online postgres /var/lib/postgresql/15/main  /var/log/postgresql/postgresql-15-main.log
+15  main2   5433 online postgres /var/lib/postgresql/15/main2 /var/log/postgresql/postgresql-15-main2.log
+root@bda-6:/home/yc-user# pg_ctlcluster 15 main2 stop
+root@bda-6:/home/yc-user# pg_lsclusters 
+Ver Cluster Port Status Owner    Data directory               Log file
+15  main    5432 online postgres /var/lib/postgresql/15/main  /var/log/postgresql/postgresql-15-main.log
+15  main2   5433 down   postgres /var/lib/postgresql/15/main2 /var/log/postgresql/postgresql-15-main2.log
+root@bda-6:/home/yc-user# 
+
+
+nano /var/lib/postgresql/15/main2/base/16387/16391
+
+root@bda-6:/home/yc-user# pg_ctlcluster 15 main2 start
+root@bda-6:/home/yc-user# pg_lsclusters 
+Ver Cluster Port Status Owner    Data directory               Log file
+15  main    5432 online postgres /var/lib/postgresql/15/main  /var/log/postgresql/postgresql-15-main.log
+15  main2   5433 online postgres /var/lib/postgresql/15/main2 /var/log/postgresql/postgresql-15-main2.log
+root@bda-6:/home/yc-user#
+
+postgres=# \c journal;
+You are now connected to database "journal" as user "postgres".
+journal=# show ignore_checksum_failure;
+ ignore_checksum_failure 
+-------------------------
+ off
+(1 row)
+
+
+journal=# select * from jrnl;
+WARNING:  page verification failed, calculated checksum 41450 but expected 32
+ERROR:  invalid page in block 0 of relation base/16387/16391
+
+alter system set ignore_checksum_failure = 'on';
+journal=# select * from jrnl;
+WARNING:  page verification failed, calculated checksum 41450 but expected 32
+ERROR:  invalid page in block 0 of relation base/16387/16391
+journal=# show ignore_checksum_failure;
+ ignore_checksum_failure 
+-------------------------
+ on
+(1 row)
+
+journal=# 
+
+
+journal=# select * from jrnl;
+
+
+
+
+
+
+
+
 
