@@ -196,7 +196,15 @@ latest_end_time       | 2024-03-17 09:05:07.92142+00
     
     3 ВМ использовать как реплику для чтения и бэкапов (подписаться на таблицы из ВМ №1 и №2 ).
 
-      LC_COLLATE         LOCALE             OID                STRATEGY           TEMPLATE           
+root@bda-13:/home/yc-user# nano /etc/postgresql/15/main/postgresql.conf
+listen_addresses = 'localhost, 172.16.64.41 ' 
+root@bda-13:/home/yc-user# nano /etc/postgresql/15/main/pg_hba.conf
+host    all             all             172.16.64.0/24            md5
+
+host    replication     all             172.16.64.34/42         md5 
+
+pg_ctlcluster 15 main restart
+
 postgres=#   create database otus;
 CREATE DATABASE
 postgres=# \c otus
@@ -221,10 +229,136 @@ CREATE SUBSCRIPTION
 otus=# 
 
 
+otus=# \dRs
+                        List of subscriptions
+              Name              |  Owner   | Enabled |  Publication   
+--------------------------------+----------+---------+----------------
+ otus_sub_to_11_fortest_backup  | postgres | t       | {backup_from1}
+ otus_sub_to_12_fortest2_backup | postgres | t       | {backup_from2}
+(2 rows)
+
+otus=# SELECT * FROM pg_stat_subscription \gx
+-[ RECORD 1 ]---------+-------------------------------
+subid                 | 16406
+subname               | otus_sub_to_11_fortest_backup
+pid                   | 6751
+relid                 | 
+received_lsn          | 0/19909A0
+last_msg_send_time    | 2024-03-17 09:15:33.507007+00
+last_msg_receipt_time | 2024-03-17 09:15:33.508285+00
+latest_end_lsn        | 0/19909A0
+latest_end_time       | 2024-03-17 09:15:33.507007+00
+-[ RECORD 2 ]---------+-------------------------------
+subid                 | 16407
+subname               | otus_sub_to_12_fortest2_backup
+pid                   | 6755
+relid                 | 
+received_lsn          | 0/19C6B78
+last_msg_send_time    | 2024-03-17 09:15:54.671712+00
+last_msg_receipt_time | 2024-03-17 09:15:54.667342+00
+latest_end_lsn        | 0/19C6B78
+latest_end_time       | 2024-03-17 09:15:54.671712+00
+
+otus=#
+
 
     
 
     ДЗ сдается в виде миниотчета на гитхабе с описанием шагов и с какими проблемами столкнулись.
 
     * реализовать горячее реплицирование для высокой доступности на 4ВМ. Источником должна выступать ВМ №3. Написать с какими проблемами столкнулись.
+
+
+root@bda-14:/home/yc-user# nano /etc/postgresql/15/main/postgresql.conf
+listen_addresses = 'localhost, 172.16.64.34 ' 
+root@bda-14:/home/yc-user# nano /etc/postgresql/15/main/pg_hba.conf
+host    all             all             172.16.64.0/24            md5
+
+root@bda-14:/home/yc-user# rm -rf /var/lib/postgresql/15/main/
+root@bda-14:/home/yc-user# sudo -u postgres pg_basebackup -h 172.16.64.41  -R -D /var/lib/postgresql/15/main/   
+Password: 
+root@bda-14:/home/yc-user# pg_ctlcluster 15 main start
+
+
+root@bda-14:/home/yc-user# pg_lsclusters
+Ver Cluster Port Status          Owner    Data directory              Log file
+15  main    5432 online,recovery postgres /var/lib/postgresql/15/main /var/log/postgresql/postgresql-15-main.log
+root@bda-14:/home/yc-user# sudo -u postgres psql
+psql (15.6 (Ubuntu 15.6-1.pgdg20.04+1))
+Type "help" for help.
+
+postgres=# SELECT * FROM pg_current_wal_lsn();
+ERROR:  recovery is in progress
+HINT:  WAL control functions cannot be executed during recovery.
+postgres=# SELECT * FROM pg_current_wal_lsn();
+ERROR:  recovery is in progress
+HINT:  WAL control functions cannot be executed during recovery.
+postgres=# select * from pg_stat_wal_receiver \gx
+-[ RECORD 1 ]---------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+pid                   | 9269
+status                | streaming
+receive_start_lsn     | 0/3000000
+receive_start_tli     | 1
+written_lsn           | 0/3000060
+flushed_lsn           | 0/3000060
+received_tli          | 1
+last_msg_send_time    | 2024-03-17 09:57:09.732309+00
+last_msg_receipt_time | 2024-03-17 09:57:09.729028+00
+latest_end_lsn        | 0/3000060
+latest_end_time       | 2024-03-17 09:55:09.506353+00
+slot_name             | 
+sender_host           | 172.16.64.41
+sender_port           | 5432
+conninfo              | user=postgres password=******** channel_binding=prefer dbname=replication host=172.16.64.41 port=5432 fallback_application_name=15/main sslmode=prefer sslcompression=0 sslcertmode=allow sslsni=1 ssl_min_protocol_version=TLSv1.2 gssencmode=prefer krbsrvname=postgres gssdelegation=0 target_session_attrs=any load_balance_hosts=disable
+
+postgres=# select pg_last_wal_receive_lsn();
+ pg_last_wal_receive_lsn 
+-------------------------
+ 0/3000060
+(1 row)
+
+postgres=# select pg_last_wal_replay_lsn();
+ pg_last_wal_replay_lsn 
+------------------------
+ 0/3000060
+(1 row)
+
+postgres=#
+
+
+
+!!!!!!!На 3 вм
+root@bda-13:/home/yc-user# sudo -u postgres psql                   
+psql (15.6 (Ubuntu 15.6-1.pgdg20.04+1))
+Type "help" for help.
+
+postgres=# SELECT * FROM pg_stat_replication \gx
+-[ RECORD 1 ]----+------------------------------
+pid              | 7114
+usesysid         | 10
+usename          | postgres
+application_name | 15/main
+client_addr      | 172.16.64.34
+client_hostname  | 
+client_port      | 35238
+backend_start    | 2024-03-17 09:55:09.496494+00
+backend_xmin     | 
+state            | streaming
+sent_lsn         | 0/3000060
+write_lsn        | 0/3000060
+flush_lsn        | 0/3000060
+replay_lsn       | 0/3000060
+write_lag        | 
+flush_lag        | 
+replay_lag       | 
+sync_priority    | 0
+sync_state       | async
+reply_time       | 2024-03-17 09:56:19.651665+00
+
+postgres=# SELECT * FROM pg_current_wal_lsn();
+ pg_current_wal_lsn 
+--------------------
+ 0/3000060
+(1 row)
+
 
